@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 import sqlite3
 
-dados_movimentacoes = []
+# Arquivos
 USUARIOS_FILE = "usuarios.json"
 DB_FILE = "usuarios.db"
 
@@ -67,11 +67,8 @@ def carregar_movimentacoes():
     conn.close()
     return movimentacoes
 
-criar_tabela_usuarios()
-criar_tabela_movimentacoes()  # Cria a tabela de movimentações
-
+# Função para carregar usuários
 def carregar_usuarios():
-    """Carrega os usuários do banco de dados SQLite"""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute("SELECT usuario, senha FROM usuarios")
@@ -79,8 +76,8 @@ def carregar_usuarios():
     conn.close()
     return usuarios
 
+# Função para salvar usuários no banco de dados
 def salvar_usuarios(usuarios):
-    """Salva os usuários no banco de dados SQLite"""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     for usuario, senha in usuarios.items():
@@ -88,25 +85,49 @@ def salvar_usuarios(usuarios):
     conn.commit()
     conn.close()
 
+# Função para atualizar a tabela
+def atualizar_tabela(page, tabela):
+    tabela.rows.clear()
+    movimentacoes = carregar_movimentacoes()
+    for mov in movimentacoes:
+        status = ft.Text(mov[7], color="green" if mov[7] == "Recebido" else "red")
+        tabela.rows.append(ft.DataRow(cells=[
+            ft.DataCell(ft.Text(mov[1])),  # material
+            ft.DataCell(ft.Text(mov[2])),  # tipo
+            ft.DataCell(ft.Text(str(mov[3]))),  # quantidade
+            ft.DataCell(ft.Text(mov[4])),  # data
+            ft.DataCell(ft.Text(mov[5])),  # colaborador
+            ft.DataCell(ft.Text(mov[6])),  # lote
+            ft.DataCell(status),
+            ft.DataCell(ft.IconButton(ft.icons.CHECK, on_click=lambda e, idx=mov[0]: abrir_popup_pagador(e, page, idx, tabela))),
+            ft.DataCell(ft.IconButton(ft.icons.PERSON, on_click=lambda e, idx=mov[0]: abrir_popup_recebedor(e, page, idx, tabela) if mov[7] == "Pago" else None))
+        ]))
+    page.update()
+
+# Função para limpar os campos
+def limpar_campos(material, tipo, quantidade, data, colaborador, lote, page):
+    material.value = ""
+    quantidade.value = ""
+    data.value = datetime.now().strftime('%d/%m/%Y')
+    lote.value = ""
+    colaborador.value = None
+    tipo.value = None
+    page.update()
+
+# Função para adicionar movimentação
 def adicionar_movimentacao(e, page, material, tipo, quantidade, data, colaborador, lote, tabela):
-    # Adicionar a movimentação no banco de dados
     adicionar_movimentacao_bd(material.value, tipo.value, int(quantidade.value), data.value, colaborador.value, lote.value)
-    
-    # Atualizar a tabela com as movimentações do banco de dados
     atualizar_tabela(page, tabela)
-    
-    # Limpar os campos
     limpar_campos(material, tipo, quantidade, data, colaborador, lote, page)
 
+# Função de autenticação do pagador
 def abrir_popup_pagador(e, page, index, tabela):
-    """Popup de autenticação para o pagador"""
     def confirmar_pagador(e):
         usuarios = carregar_usuarios()
         pagador = campo_pagador.value
         senha_pagador = campo_senha_pagador.value
 
         if pagador in usuarios and usuarios[pagador] == senha_pagador:
-            # Atualizar status da movimentação no banco de dados para "Pago"
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
             cursor.execute("UPDATE movimentacoes SET status = ?, pagador = ? WHERE id = ?", 
@@ -134,15 +155,14 @@ def abrir_popup_pagador(e, page, index, tabela):
     popup.open = True
     page.update()
 
+# Função de autenticação do recebedor
 def abrir_popup_recebedor(e, page, index, tabela):
-    """Popup de autenticação para o recebedor"""
     def confirmar_recebedor(e):
         usuarios = carregar_usuarios()
         recebedor = campo_recebedor.value
         senha_recebedor = campo_senha_recebedor.value
 
         if recebedor in usuarios and usuarios[recebedor] == senha_recebedor:
-            # Atualizar status da movimentação no banco de dados para "Recebido"
             conn = sqlite3.connect(DB_FILE)
             cursor = conn.cursor()
             cursor.execute("UPDATE movimentacoes SET status = ?, recebedor = ? WHERE id = ?", 
@@ -170,39 +190,8 @@ def abrir_popup_recebedor(e, page, index, tabela):
     popup.open = True
     page.update()
 
-def atualizar_tabela(page, tabela, filtro_lote=""):
-    """Atualiza a tabela de movimentações com ou sem filtro de lote"""
-    tabela.rows.clear()
-    movimentacoes = carregar_movimentacoes()  # Carregar movimentações do banco de dados
-    for mov in movimentacoes:
-        if filtro_lote and filtro_lote not in mov[6]:
-            continue  # Filtra pelo lote, caso o filtro seja preenchido
-
-        status = ft.Text(mov[7], color="green" if mov[7] == "Recebido" else "red")
-        tabela.rows.append(ft.DataRow(cells=[
-            ft.DataCell(ft.Text(mov[1])),  # material
-            ft.DataCell(ft.Text(mov[2])),  # tipo
-            ft.DataCell(ft.Text(str(mov[3]))),  # quantidade
-            ft.DataCell(ft.Text(mov[4])),  # data
-            ft.DataCell(ft.Text(mov[5])),  # colaborador
-            ft.DataCell(ft.Text(mov[6])),  # lote
-            ft.DataCell(status),
-            ft.DataCell(ft.IconButton(ft.icons.CHECK, on_click=lambda e, idx=mov[0]: abrir_popup_pagador(e, page, idx, tabela))),
-            ft.DataCell(ft.IconButton(ft.icons.PERSON, on_click=lambda e, idx=mov[0]: abrir_popup_recebedor(e, page, idx, tabela) if mov[7] == "Pago" else None))
-        ]))
-    page.update()
-
-def limpar_campos(material, tipo, quantidade, data, colaborador, lote, page):
-    material.value = ""
-    quantidade.value = ""
-    data.value = datetime.now().strftime('%d/%m/%Y')
-    lote.value = ""
-    colaborador.value = None
-    tipo.value = None
-    page.update()
-
+# Função principal para a página
 def pagina_principal(page: ft.Page):
-    """Página principal com os inputs e a tabela"""
     page.clean()
     page.title = "Controle de Pagamentos"
     page.window_width = 900
@@ -232,7 +221,7 @@ def pagina_principal(page: ft.Page):
 
     def filtrar_por_lote(e):
         filtro_lote = campo_pesquisa_lote.value
-        atualizar_tabela(page, tabela, filtro_lote)
+        atualizar_tabela(page, tabela)
 
     campo_pesquisa_lote.on_change = filtrar_por_lote
 
@@ -240,70 +229,12 @@ def pagina_principal(page: ft.Page):
 
     page.add(
         ft.Column([
-            ft.Text("Controle de Pagamentos", size=24, weight=ft.FontWeight.BOLD),
-            ft.Row([campo_material, dropdown_tipo, campo_quantidade]),
-            ft.Row([campo_data, dropdown_colaborador, campo_lote]),
-            ft.Row([botao_adicionar]),
-            ft.Row([campo_pesquisa_lote]),
-            ft.Text("Movimentações", size=20, weight=ft.FontWeight.BOLD),
-            tabela
+            campo_material, dropdown_tipo, campo_quantidade, campo_data, dropdown_colaborador, campo_lote, botao_adicionar, campo_pesquisa_lote, tabela
         ])
     )
 
     atualizar_tabela(page, tabela)
 
-def login(page: ft.Page):
-    """Tela de login"""
-    page.clean()
-    page.title = "Login"
+# Inicializa o app
+ft.app(target=pagina_principal)
 
-    campo_usuario = ft.TextField(label="Usuário", width=200)
-    campo_senha = ft.TextField(label="Senha", password=True, width=200)
-
-    def verificar_login(e):
-        usuarios = carregar_usuarios()
-        usuario = campo_usuario.value
-        senha = campo_senha.value
-
-        if usuario in usuarios and usuarios[usuario] == senha:
-            pagina_principal(page)
-        else:
-            page.snack_bar = ft.SnackBar(ft.Text("Usuário ou senha inválidos!", color="red"))
-            page.snack_bar.open = True
-            page.update()
-
-    def criar_usuario(e):
-        usuarios = carregar_usuarios()
-        usuario = campo_usuario.value
-        senha = campo_senha.value
-
-        if usuario and senha:
-            if usuario in usuarios:
-                page.snack_bar = ft.SnackBar(ft.Text("Usuário já existe!", color="red"))
-            else:
-                usuarios[usuario] = senha
-                salvar_usuarios(usuarios)
-                page.snack_bar = ft.SnackBar(ft.Text("Usuário criado com sucesso!", color="green"))
-            page.snack_bar.open = True
-            page.update()
-        else:
-            page.snack_bar = ft.SnackBar(ft.Text("Preencha usuário e senha!", color="red"))
-            page.snack_bar.open = True
-            page.update()
-
-    botao_login = ft.ElevatedButton(text="Entrar", on_click=verificar_login)
-    botao_criar = ft.ElevatedButton(text="Criar Usuário", on_click=criar_usuario)
-
-    page.add(
-        ft.Column([
-            ft.Text("Login no Sistema", size=24, weight=ft.FontWeight.BOLD),
-            campo_usuario,
-            campo_senha,
-            ft.Row([botao_login, botao_criar])
-        ])
-    )
-
-def main(page: ft.Page):
-    login(page)
-
-ft.app(target=main)
